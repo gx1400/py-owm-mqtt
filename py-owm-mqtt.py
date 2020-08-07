@@ -154,28 +154,24 @@ def mqtt_on_message(client, userdata, msg):
     donothing()
 
 def owm_setupAPI():
-    print('try to auth with omw')
     global owm
     owm = pyowm.OWM(tokenOwm)
 
 def owm_getWeather(loc):
     try:
         mgr = owm.weather_manager()
-        print(loc)
         observation = mgr.weather_at_zip_code(loc,'US')
         w = observation.weather
-        print('got weather')
         temp = str(w.temperature('fahrenheit')['temp'])
         feelslike = str(w.temperature('fahrenheit')['feels_like'])
         hum = str(w.to_dict()['humidity'])
 
-        print('topic: ' + mqttTopic)
         msg = {
             'temp': temp,
             'feelslike': feelslike,
             'humidity': hum
         }
-        print('topic: ' + mqttTopic + ', msg: ' + json.dumps(msg))
+        logger.debug('topic: ' + mqttTopic + ', msg: ' + json.dumps(msg))
         client.publish(mqttTopic, json.dumps(msg), 0, False)
 
     except:
@@ -196,7 +192,6 @@ def read_config():
 
     tokenOwm = parser.get('owm', 'token').strip('\'')
     location = parser.get('owm', 'USzipcode').strip('\'')
-    print()
 
 def signal_handler(signum,frame):
     global terminate
