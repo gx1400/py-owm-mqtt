@@ -5,3 +5,4 @@ topic = 'yourMqtt/tokenName/here'
 
 [owm]
 token = 'yourTokenHere'
+USzipcode = 'yourLocation'

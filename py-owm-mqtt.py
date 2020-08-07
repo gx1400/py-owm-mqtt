@@ -16,7 +16,7 @@ import requests
 import os, sys, signal, time
 from configparser import ConfigParser
 import paho.mqtt.client as mqtt
-from pyowm import * 
+import pyowm
 
 from datetime import datetime
 
@@ -49,8 +49,10 @@ mqttAddr = 'not loaded'
 mqttPort = -1
 mqttTopic = 'not loaded'
 tokenOwm = 'not loaded'
+owm = None
 terminate = False
 client = None
+location = ''
 
 '''
 ******* Functions
@@ -64,39 +66,37 @@ def main():
     logger_setup()
 
     #try to connect to ecobee
-    owm_connect()
+    owm_setupAPI()
     
     # Connect to Mqtt
-    #client = mqtt.Client()
-    #client.on_connect = mqtt_on_connect
-    #client.on_message = mqtt_on_message
-
-    #try:
-    #    logger.info('Attempting to connect to mqtt server: ' + mqttAddr + 
-    #        ':' + str(mqttPort))
-    #    client.connect(mqttAddr, mqttPort, 60)
-    #except:
-    #    logger.error('failed to connect to mqtt.... aborting script')
-    #    sys.exit()
-
+    client = mqtt.Client()
+    client.on_connect = mqtt_on_connect
+    client.on_message = mqtt_on_message
+    
+    try:
+        logger.info('Attempting to connect to mqtt server: ' + mqttAddr + 
+            ':' + str(mqttPort))
+        client.connect(mqttAddr, mqttPort, 60)
+    except:
+        logger.error('failed to connect to mqtt.... aborting script')
+        sys.exit()
+    
     signal.signal(signal.SIGINT, signal_handler)
-
     logger.info('Starting loop...')
 
-    #client.loop_forever()
-    #client.loop_start()
+    client.loop_start()
     loopct = 0
 
     try:
         while True:
             if terminate:
-                #mqtt_endloop()
+                mqtt_endloop()
                 break
         
-            if (loopct >= 2):
+            if (loopct >= 60):
                 logger.info('Start of loop')
                 try:
-                    owm_getWeather('Overland Park, KS')
+                    owm_getWeather(location)
                 except requests.ConnectionError:
                     logger.error('Connection error!')
                 except requests.Timeout:
@@ -147,16 +147,39 @@ def mqtt_on_connect(client, userdata, flags, rc):
     # subscribing in on_connect means if we lose the connection and 
     # reconnect then subscriptions will be renewed
     client.subscribe('$SYS/#')
+    
 
 # call back for when a public message is received by the server
 def mqtt_on_message(client, userdata, msg):
     donothing()
 
-def owm_connect():
+def owm_setupAPI():
     print('try to auth with omw')
+    global owm
+    owm = pyowm.OWM(tokenOwm)
 
-def owm_getWeather(location):
-    print(location)
+def owm_getWeather(loc):
+    try:
+        mgr = owm.weather_manager()
+        print(loc)
+        observation = mgr.weather_at_zip_code(loc,'US')
+        w = observation.weather
+        print('got weather')
+        temp = str(w.temperature('fahrenheit')['temp'])
+        feelslike = str(w.temperature('fahrenheit')['feels_like'])
+        hum = str(w.to_dict()['humidity'])
+
+        print('topic: ' + mqttTopic)
+        msg = {
+            'temp': temp,
+            'feelslike': feelslike,
+            'humidity': hum
+        }
+        print('topic: ' + mqttTopic + ', msg: ' + json.dumps(msg))
+        client.publish(mqttTopic, json.dumps(msg), 0, False)
+
+    except:
+        logger.error('error getting weather info')
 
 # function for reading the config.cfg file to set global operation params
 def read_config():
@@ -165,13 +188,15 @@ def read_config():
     configfile = os.path.join(thisfolder, 'config.cfg')
     parser.read(configfile, encoding=None)
 
-    global mqttAddr, mqttPort, mqttTopic, tokenOwm
+    global mqttAddr, mqttPort, mqttTopic, tokenOwm, location
 
     mqttAddr = parser.get('mqtt', 'ipaddr').strip('\'')
     mqttPort = parser.getint('mqtt', 'port')
     mqttTopic = parser.get('mqtt', 'topic').strip('\'')
 
     tokenOwm = parser.get('owm', 'token').strip('\'')
+    location = parser.get('owm', 'USzipcode').strip('\'')
+    print()
 
 def signal_handler(signum,frame):
     global terminate
