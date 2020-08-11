@@ -20,9 +20,6 @@ import pyowm
 
 from datetime import datetime
 
-import pytz
-from six.moves import input
-
 import json
 
 import logging
@@ -93,7 +90,7 @@ def main():
                 mqtt_endloop()
                 break
         
-            if (loopct >= 60):
+            if (loopct >= 180):
                 logger.info('Start of loop')
                 try:
                     owm_getWeather(location)
@@ -162,11 +159,12 @@ def owm_getWeather(loc):
         mgr = owm.weather_manager()
         observation = mgr.weather_at_zip_code(loc,'US')
         w = observation.weather
-        temp = str(w.temperature('fahrenheit')['temp'])
-        feelslike = str(w.temperature('fahrenheit')['feels_like'])
-        hum = str(w.to_dict()['humidity'])
+        temp = w.temperature('fahrenheit')['temp']
+        feelslike = w.temperature('fahrenheit')['feels_like']
+        hum = w.to_dict()['humidity']
 
         msg = {
+            'zipcode': loc,
             'temp': temp,
             'feelslike': feelslike,
             'humidity': hum
